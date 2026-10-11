@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
 
-from .engine import run_loop, welcome
-
+from .engine import run
 
 def main():
-    welcome()      # Сначала спрашиваем имя и здороваемся
-    run_loop()     # Потом запускаем цикл команд (help/exit)
+    run()
 
 if __name__ == "__main__":
     main()
