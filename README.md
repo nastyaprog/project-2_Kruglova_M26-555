@@ -36,17 +36,13 @@
 
 Поддерживаемые типы: `int`, `str`, `bool`.
 
-## Установка и запуск
-
-Проект собран как пакет с точкой входа CLI. 
-
-# Синхронизация зависимостей (использует uv.lock)
+## Синхронизация зависимостей (использует uv.lock)
 uv sync
 
-# Сборка пакета
+### Сборка пакета
 uv build
 
-# Установка и запуск
+### Установка и запуск
 uv pip install dist/primitive_db-*.whl
 
 Точка входа CLI доступна через uv:
@@ -60,21 +56,3 @@ uv run database
 
 Аксинема:
 https://asciinema.org/connect/baad0142-7c8f-4972-a7dc-b5b3aede0a2c
-
-nicek@Home MINGW64 ~/project-2_Kruglova_M26-555 (main)
-$ database
->>> Введите команду: create_table users name:str age:int
-Таблица "users" успешно создана со столбцами: ID:int, name:str, age:intexit
->>> Введите команду: list_tables
-- users
->>> Введите команду: create_table products title:str price:float
-Ошибка: Неподдерживаемый тип: float
->>> Введите команду: list_tables
-- users
->>> Введите команду: drop_table products
-Ошибка: Таблица "products" не существует.
->>> Введите команду: list_tables
-- users
->>> Введите команду: exit
-Выход из программы.
-
