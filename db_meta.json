@@ -1,16 +1,1 @@
-{
-  "users": [
-    {
-      "name": "ID",
-      "type": "int"
-    },
-    {
-      "name": "name",
-      "type": "str"
-    },
-    {
-      "name": "age",
-      "type": "int"
-    }
-  ]
-}
+{}

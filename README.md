@@ -58,10 +58,13 @@ uv run database
 ## Демонстрация работы
 Ниже — реальный лог работы CLI, включая обработку некорректных команд. Это демонстрирует устойчивость системы к ошибочным данным.
 
+Аксинема:
+https://asciinema.org/connect/baad0142-7c8f-4972-a7dc-b5b3aede0a2c
+
 nicek@Home MINGW64 ~/project-2_Kruglova_M26-555 (main)
 $ database
 >>> Введите команду: create_table users name:str age:int
-Таблица "users" успешно создана со столбцами: ID:int, name:str, age:int
+Таблица "users" успешно создана со столбцами: ID:int, name:str, age:intexit
 >>> Введите команду: list_tables
 - users
 >>> Введите команду: create_table products title:str price:float
