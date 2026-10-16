@@ -1,18 +1,18 @@
 import re
-import shlex
-from typing import Any, List, Dict
+from typing import Any, Dict, List
+
 from prettytable import PrettyTable
 
-from .utils import load_metadata, save_metadata, DATA_DIR
+from .constants import METADATA_FILE
 from .core import (
     execute_create_table,
+    execute_delete,
+    execute_drop_table,
     execute_insert,
     execute_select,
-    execute_drop_table,
-    execute_delete,
     list_tables,
 )
-from .constants import METADATA_FILE
+from .utils import load_metadata, save_metadata
 
 
 def parse_values(values_str: str) -> List[Any]:
@@ -137,7 +137,10 @@ def run():
         if cmd == "create_table":
             args = args_raw.split()
             if len(args) < 2:
-                print("Ошибка: недостаточно аргументов. Пример: create_table users name:str age:int")
+                print(
+                    "Ошибка: недостаточно аргументов. " 
+                    "Пример: create_table users name:str age:int"
+                )
                 continue
             table_name = args[0]
             columns_raw = args[1:]
@@ -146,7 +149,10 @@ def run():
                 save_metadata(METADATA_FILE, new_metadata)
                 cols = new_metadata[table_name]
                 col_names_types = ", ".join(f"{c['name']}:{c['type']}" for c in cols)
-                print(f'Таблица "{table_name}" успешно создана со столбцами: {col_names_types}')
+                print(
+                    f'Таблица "{table_name}" успешно создана '
+                    f'со столбцами: {col_names_types}'
+                )
             except Exception as e:
                 print(f"Ошибка: {e}")
             continue
@@ -181,7 +187,10 @@ def run():
             # Формат: insert into users values ('Alice', 25, true)
             match = re.match(r"^into\s+(\S+)\s+values\s+(.*)$", args_raw, re.IGNORECASE)
             if not match:
-                print('Ошибка: неверный формат INSERT. Пример: insert into users values (\'Alice\', 25, true)')
+                print(
+                    'Ошибка: неверный формат INSERT. '
+                    'Пример: insert into users values (\'Alice\', 25, true)'
+                )
                 continue
             table_name, values_str = match.groups()
 
@@ -194,16 +203,21 @@ def run():
 
             try:
                 record_id = execute_insert(table_name, values_raw, cols)
-                print(f"Запись с ID={record_id} успешно добавлена в таблицу \"{table_name}\".")
+                print(
+                    f"Запись с ID={record_id} успешно добавлена в таблицу \"{table_name}\"."  # noqa: E501
+                )
             except Exception as e:
                 print(f"Ошибка: {e}")
             continue
 
         # select
         if cmd == "select":
-            match = re.match(r"^from\s+(\S+)(?:\s+where\s+(.+))?$", args_raw, re.IGNORECASE)
+            match = re.match(r"^from\s+(\S+)(?:\s+where\s+(.+))?$", args_raw, re.IGNORECASE)  # noqa: E501
             if not match:
-                print('Ошибка: неверный формат SELECT. Пример: select from users [where age > 20]')
+                print(
+                    'Ошибка: неверный формат SELECT. '
+                    'Пример: select from users [where age > 20]'
+                )
                 continue
             table_name, where_part = match.groups()
 
@@ -221,10 +235,19 @@ def run():
 
         # delete
         if cmd == "delete":
-            match = re.match(r"^from\s+(\S+)\s+where\s+(.+)$", args_raw, re.IGNORECASE)
+            # Поддерживаем и с WHERE, и без WHERE (удалить всё)
+            match = re.match(
+                r"^from\s+(\S+)(?:\s+where\s+(.+))?$", 
+                args_raw, re.IGNORECASE,
+            )
             if not match:
-                print('Ошибка: неверный формат DELETE. Пример: delete from users where name = \'Alice\'')
+                print(
+                    "Ошибка: неверный формат DELETE. "
+                    "Примеры: delete from users where name = 'Alice' "
+                    "или delete from users"
+                )
                 continue
+
             table_name, where_part = match.groups()
 
             if table_name not in metadata:
@@ -232,10 +255,38 @@ def run():
                 continue
 
             try:
-                deleted_count = execute_delete(table_name, where_part)
-                print(f"Удалено записей: {deleted_count}")
+                if where_part is None:
+                    # Удаление всех записей — спрашиваем подтверждение явно
+                    confirm = (
+                        input(
+                            "Вы уверены, что хотите УДАЛИТЬ ВСЕ записи " \
+                            f'из таблицы "{table_name}"? [y/n]: '
+                        )
+                        .strip()
+                        .lower()
+                    )
+                    if confirm != "y":
+                        continue
+                    # пустая строка — признак «удалить всё»
+                    deleted_count = execute_delete(table_name, "")
+                else:
+                    confirm = input(
+                        f"Вы уверены, что хотите выполнить удаление записей по условию "
+                        f"'{where_part}' из таблицы \"{table_name}\"? [y/n]: "
+                    ).strip().lower()
+                    if confirm != "y":
+                        continue
+                    deleted_count = execute_delete(table_name, where_part)
+
+                if deleted_count == 0:
+                    if where_part:
+                        print("Записей, удовлетворяющих условию WHERE, не найдено.")
+                    else:
+                        # Случай «delete from users» на пустой таблице
+                        print("В таблице нет записей для удаления.")
+                else:
+                    print(f"Успешно удалено записей: {deleted_count}")
+
             except Exception as e:
                 print(f"Ошибка: {e}")
             continue
-
-        print("Неизвестная команда. Введите 'help' для справки.")

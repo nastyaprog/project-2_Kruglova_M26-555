@@ -1,13 +1,10 @@
-import json
 import re
 from typing import Any, Dict, List, Optional
-from pathlib import Path
 
-from .decorators import handle_db_errors, confirm_action, log_time
-from .utils import DATA_DIR, load_metadata, save_metadata, load_data, save_data
 from .constants import METADATA_FILE
+from .decorators import confirm_action, handle_db_errors, log_time
 from .parser import parse_columns  # <-- Импорт функции парсинга
-
+from .utils import DATA_DIR, load_data, load_metadata, save_data, save_metadata
 
 # --- Вспомогательные функции для типов ---
 
@@ -15,7 +12,8 @@ def convert_value_to_type(value: str, target_type: str) -> Any:
     """Преобразует строковое значение в нужный тип данных."""
     target_type = target_type.lower()
     
-    # Если это уже не строка (например, передали число при тестировании), возвращаем как есть
+    # Если это уже не строка (например, передали число при тестировании),
+    # возвращаем как есть
     if not isinstance(value, str):
         return value
 
@@ -49,14 +47,20 @@ def convert_value_to_type(value: str, target_type: str) -> Any:
 # --- Логика управления таблицами (Core Logic) ---
 
 @handle_db_errors
-def execute_create_table(metadata: dict, table_name: str, columns_raw: List[str]) -> dict:
+def execute_create_table(
+    metadata: dict, 
+    table_name: str, 
+    columns_raw: List[str],
+) -> dict:
     """
     Создает таблицу. 
     ВАЖНО: Парсинг колонок (columns_raw -> список словарей) происходит в parser.py.
     Здесь остается только бизнес-логика.
     """
     if not isinstance(table_name, str):
-        raise ValueError(f"Имя таблицы должно быть строкой, а не {type(table_name).__name__}")
+        raise ValueError(
+            f"Имя таблицы должно быть строкой, а не {type(table_name).__name__}"
+            )
 
     if table_name in metadata:
         raise ValueError(f'Ошибка: таблица "{table_name}" уже существует.')
@@ -115,7 +119,10 @@ def get_info(metadata: Dict[str, Any], table_name: str) -> Optional[Dict[str, An
 
 # --- CRUD операции (базовые функции работы со списком) ---
 
-def create_record(records: List[Dict[str, Any]], new_record: Dict[str, Any]) -> List[Dict[str, Any]]:
+def create_record(
+        records: List[Dict[str, Any]], 
+        new_record: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
     next_id = (max((r["ID"] for r in records), default=0)) + 1
     new_record["ID"] = next_id
     records.append(new_record)
@@ -124,13 +131,19 @@ def create_record(records: List[Dict[str, Any]], new_record: Dict[str, Any]) -> 
 
 @handle_db_errors
 @log_time
-def execute_insert(table_name: str, values_raw: List[Any], columns: List[Dict[str, str]]) -> int:
+def execute_insert(
+    table_name: str, 
+    values_raw: List[Any], 
+    columns: List[Dict[str, str]],
+) -> int:
     """Вставляет одну запись. values_raw - это список значений без ID."""
     # Ожидаем количество значений равное количеству колонок минус ID
     expected_count = len(columns) - 1
     
     if len(values_raw) != expected_count:
-        raise ValueError(f"Ожидается {expected_count} значений, передано {len(values_raw)}.")
+        raise ValueError(
+            f"Ожидается {expected_count} значений, передано {len(values_raw)}."
+            )
 
     converted_values = []
     # Проходим по колонкам начиная со второй (пропуская ID)
@@ -152,7 +165,10 @@ def execute_insert(table_name: str, values_raw: List[Any], columns: List[Dict[st
     return data[-1]["ID"]
 
 
-def filter_records(records: List[Dict[str, Any]], condition: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def filter_records(
+    records: List[Dict[str, Any]], 
+    condition: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """Фильтрует список записей по условию WHERE."""
     if not condition:
         return records
@@ -195,7 +211,8 @@ def execute_select(table_name: str, where_part: Optional[str]) -> List[Dict[str,
     if not where_part:
         return data
 
-    # Парсинг условия WHERE (можно вынести в parser.py в будущем, но пока оставим здесь для SELECT)
+    # Парсинг условия WHERE (можно вынести в parser.py в будущем, 
+    #но пока оставляю здесь для SELECT)
     pattern = r'^\s*([A-Za-z_][\w]*)\s*(>=|<=|<>|!=|=|>|<)\s*(.*)\s*$'
     match = re.match(pattern, where_part.strip())
     if not match:
@@ -231,18 +248,27 @@ def execute_select(table_name: str, where_part: Optional[str]) -> List[Dict[str,
 
     return filter_records(data, condition)
 
-
-@confirm_action("удаление записей")
 @handle_db_errors
 @log_time
 def execute_delete(table_name: str, where_part: str) -> int:
+    """
+    Удаляет записи по условию.
+    Если where_part пуст или None — удаляет все записи в таблице.
+    Возвращает количество удалённых записей.
+    """
     data = load_data(table_name) or []
     if not data:
         return 0
 
-    # Единый простой парсер для WHERE (как в execute_select)
+    # Если условие пустое — удаляем всё
+    if not where_part or not where_part.strip():
+        initial_len = len(data)
+        save_data(table_name, [])
+        return initial_len
+
+    where_part = where_part.strip()
     pattern = r'^\s*([A-Za-z_][\w]*)\s*(>=|<=|<>|!=|=|>|<)\s*(.*)\s*$'
-    match = re.match(pattern, where_part.strip())
+    match = re.match(pattern, where_part)
     if not match:
         raise ValueError(f"Некорректный формат условия WHERE: {where_part}")
 
@@ -250,7 +276,6 @@ def execute_delete(table_name: str, where_part: str) -> int:
     operator = match.group(2).strip()
     raw_val_str = match.group(3).strip()
 
-    # Убираем кавычки, если они есть
     value = raw_val_str
     if len(value) >= 2 and ((value.startswith('"') and value.endswith('"')) or
                             (value.startswith("'") and value.endswith("'"))):
@@ -268,9 +293,7 @@ def execute_delete(table_name: str, where_part: str) -> int:
     else:
         target_value = value
 
-    initial_len = len(data)
     ids_to_remove = set()
-
     for row in data:
         cell = row.get(col_name)
         if cell is None:
@@ -294,10 +317,8 @@ def execute_delete(table_name: str, where_part: str) -> int:
             ids_to_remove.add(row["ID"])
 
     if not ids_to_remove:
-        # Если совпадений нет, возвращаем 0 — это нормально, не ошибка
         return 0
 
     new_data = [row for row in data if row["ID"] not in ids_to_remove]
     save_data(table_name, new_data)
-
-    return initial_len - len(new_data)
+    return len(ids_to_remove)

@@ -1,6 +1,7 @@
 import time
 from functools import wraps
 
+
 # 1. Декоратор обработки ошибок
 def handle_db_errors(func):
     @wraps(func)
@@ -8,7 +9,10 @@ def handle_db_errors(func):
         try:
             return func(*args, **kwargs)
         except FileNotFoundError:
-            print("Ошибка: Файл данных не найден. Возможно, база данных не инициализирована.")
+            print(
+                "Ошибка: Файл данных не найден. "
+                "Возможно, база данных не инициализирована."
+            )
         except KeyError as e:
             # Если это ошибка про таблицу, уберём лишние кавычки для красоты
             error_msg = str(e).replace("'", "")
@@ -25,7 +29,11 @@ def confirm_action(action_name: str):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            confirm = input(f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: ").strip().lower()
+            confirm = (
+                input(f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: ")
+            .strip()
+            .lower()
+            )
             if confirm != "y":
                 print("Операция отменена пользователем.")
                 return 0  # или None — главное, не запускать реальную функцию

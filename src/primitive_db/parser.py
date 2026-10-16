@@ -1,4 +1,6 @@
-from typing import List, Dict, Any 
+import re
+from typing import Any, Dict, List
+
 from .constants import SUPPORTED_TYPES
 
 
@@ -7,8 +9,10 @@ def parse_where_clause(where_str: str) -> Dict[str, Any]:
     Парсит простое условие WHERE и возвращает словарь {column: value}.
     
     Поддерживаемые операторы: =, >, <, >=, <=, !=, <>
-    НО: оператор НЕ включается в возвращаемый dict. Он нужен только для execute_*,
-    поэтому здесь мы возвращаем только {column: value}, а оператор можно вернуть отдельно,
+    НО: оператор НЕ включается в возвращаемый dict. 
+    Он нужен только для execute_*,
+    поэтому здесь мы возвращаем только {column: value}, 
+    а оператор можно вернуть отдельно,
     если ты решишь усложнить логику позже.
 
     Примеры:
@@ -29,7 +33,6 @@ def parse_where_clause(where_str: str) -> Dict[str, Any]:
         raise ValueError(f"Некорректный формат условия WHERE: {where_str}")
 
     col_name = match.group(1).strip()
-    operator = match.group(2).strip()  # Сохраняем оператор, если понадобится
     raw_val_str = match.group(3).strip()
 
     value = raw_val_str
@@ -43,18 +46,23 @@ def parse_where_clause(where_str: str) -> Dict[str, Any]:
 
     # Булевы значения
     if lower_val in ("true", "1", "yes"):
-        return {col_name: True}
+        target_value = True
     elif lower_val in ("false", "0", "no"):
-        return {col_name: False}
-
-    # Числа
-    if re.fullmatch(r"-?\d+", value):
-        return {col_name: int(value)}
+        target_value = False
+    # Обработка чисел
+    elif re.fullmatch(r"-?\d+", value):
+        target_value = int(value)
     elif re.fullmatch(r"-?\d+\.\d+", value):
-        return {col_name: float(value)}
-
-    # Иначе — строка
-    return {col_name: value}
+        target_value = float(value)
+    else:
+        # Иначе считаем строкой
+        target_value = value
+    
+    return {
+        "column": col_name,
+        "operator": match.group(2).strip(),
+        "value": target_value
+    }
 
 
 def parse_set_clause(set_str: str) -> Dict[str, Any]:
@@ -67,7 +75,9 @@ def parse_set_clause(set_str: str) -> Dict[str, Any]:
         key = key.strip()
         val_str = val_str.strip()
 
-        if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
+        starts_with_double = val_str.startswith('"') and val_str.endswith('"')
+        starts_with_single = val_str.startswith("'") and val_str.endswith("'")
+        if starts_with_double or starts_with_single:
             val = val_str[1:-1]
         else:
             val = val_str
