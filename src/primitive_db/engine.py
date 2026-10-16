@@ -8,8 +8,10 @@ from .core import (
     execute_create_table,
     execute_delete,
     execute_drop_table,
+    execute_info,
     execute_insert,
     execute_select,
+    execute_update,
     list_tables,
 )
 from .utils import load_metadata, save_metadata
@@ -112,15 +114,21 @@ def run():
         # help
         if cmd == "help":
             print(
-                "Доступные команды:\n"
-                "  create_table <name> <col:type> ...\n"
-                "  drop_table <name>\n"
-                "  list_tables\n"
-                "  insert into <name> values (...)\n"
-                "  select from <name> [where ...]\n"
-                "  delete from <name> where ...\n"
-                "  help\n"
-                "  exit"
+                "create_table <имя_таблицы> <col1:type> <col2:type> ... "
+                "— создать таблицу.\n"
+                "drop_table <имя_таблицы> — удалить таблицу.\n"
+                "list_tables — показать список таблиц.\n"
+                "insert into <имя_таблицы> values (<v1>, <v2>, ...) "
+                "— добавить запись.\n"
+                "select from <имя_таблицы> [where <условие>] — "
+                "выбрать записи.\n"
+                "update <имя_таблицы> set <col>=<value> [where <условие>] — "
+                "обновить записи.\n"
+                "delete from <имя_таблицы> [where <условие>] — "
+                "удалить записи.\n"
+                "info <имя_таблицы> — показать информацию о таблице.\n"
+                "exit — выход из программы.\n"
+                "help — справка."
             )
             continue
 
@@ -181,6 +189,25 @@ def run():
                 for t in tables:
                     print("-", t)
             continue
+        # info
+        if cmd == "info":
+            args = args_raw.split()
+            if len(args) != 1:
+                print("Ошибка: укажите имя таблицы. Пример: info users")
+                continue
+            table_name = args[0]
+
+            try:
+                info = execute_info(table_name)
+                print(f"Таблица: {info['name']}")
+                print("Колонки:")
+                for col in info["columns"]:
+                    # col — это словарь {"name": "...", "type": "..."}
+                    print(f"  - {col['name']}: {col['type']}")
+                print(f"Всего записей: {info['total_rows']}")
+            except Exception as e:
+                print(f"Ошибка: {e}")
+            continue
 
         # insert
         if cmd == "insert":
@@ -229,6 +256,59 @@ def run():
                 rows = execute_select(table_name, where_part)
                 cols = metadata[table_name]
                 print(format_table(rows, cols))
+            except Exception as e:
+                print(f"Ошибка: {e}")
+            continue
+        # update
+        if cmd == "update":
+            # Формат: update users set age=30 where name='Alice'
+            # или update users set is_active=true
+            update_pattern = r"\bset\s+(.+?)(?:\s+where\s+(.+))?$"
+            set_match = re.search(update_pattern, args_raw, re.IGNORECASE)
+            if not set_match:
+                print(
+                    "Ошибка: неверный формат UPDATE. "
+                    "Пример: update users set age=30 where name='Alice' "
+                    "или update users set is_active=true"
+                )
+                continue
+
+            set_part = set_match.group(1)
+            where_part = set_match.group(2)
+
+            # Парсим имя таблицы: первое слово до 'set'
+            table_match = re.match(r"^\s*(\S+)\s+set", args_raw, re.IGNORECASE)
+            if not table_match:
+                print("Ошибка: не удалось определить имя таблицы.")
+                continue
+            table_name = table_match.group(1)
+
+            if table_name not in metadata:
+                print(f'Ошибка: таблица "{table_name}" не найдена.')
+                continue
+
+            confirm = (
+                input(
+                    f"Вы уверены, что хотите выполнить обновление записей "
+                    f"в таблице \"{table_name}\"? [y/n]: "
+                )
+                .strip()
+                .lower()
+            )
+            if confirm != "y":
+                continue
+
+            try:
+                updated_count = execute_update(table_name, set_part, where_part)
+                if updated_count == 0:
+                    NO_MATCH_WHERE = "Нет записей, подходящих под условие WHERE."
+                    NO_UPDATES = "Обновлений не выполнено (значения не изменились)."
+                    if where_part:
+                        print(NO_MATCH_WHERE)
+                    else:
+                        print(NO_UPDATES)
+                else:
+                    print(f"Успешно обновлено записей: {updated_count}")
             except Exception as e:
                 print(f"Ошибка: {e}")
             continue

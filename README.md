@@ -71,7 +71,7 @@ drop_table users
 list_tables
 exit
 
-https://asciinema.org/a/GD5yhzWf9tv9IBru
+https://asciinema.org/a/698L4h3lYrhmCcxF
 
 ### Особенности реализации
 

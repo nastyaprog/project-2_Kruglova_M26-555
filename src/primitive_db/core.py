@@ -3,7 +3,10 @@ from typing import Any, Dict, List, Optional
 
 from .constants import METADATA_FILE
 from .decorators import confirm_action, handle_db_errors, log_time
-from .parser import parse_columns  # <-- Импорт функции парсинга
+from .parser import (  # <-- важно добавить parse_set_clause
+    parse_columns,
+    parse_set_clause,
+)
 from .utils import DATA_DIR, load_data, load_metadata, save_data, save_metadata
 
 # --- Вспомогательные функции для типов ---
@@ -45,6 +48,103 @@ def convert_value_to_type(value: str, target_type: str) -> Any:
 
 
 # --- Логика управления таблицами (Core Logic) ---
+
+@handle_db_errors
+@log_time
+def execute_update(
+    table_name: str, 
+    set_part: str, 
+    where_part: str | None = None,
+) -> int:
+    """
+    Обновляет записи в таблице по условию WHERE.
+    Если where_part пуст — обновляет все строки.
+    Возвращает число обновлённых строк.
+    """
+    data = load_data(table_name) or []
+    if not data:
+        return 0
+
+    # Парсим часть SET: col=value, col2=value2
+    updates = parse_set_clause(set_part)
+
+    # Если WHERE нет — обновляем все строки
+    if not where_part or not where_part.strip():
+        updated_count = 0
+        for row in data:
+            changed = False
+            for col, new_val in updates.items():
+                if col in row and row[col] != new_val:
+                    row[col] = new_val
+                    changed = True
+            if changed:
+                updated_count += 1
+        save_data(table_name, data)
+        return updated_count
+
+    # Иначе парсим WHERE через тот же механизм, что и в execute_delete/execute_select
+    where_part = where_part.strip()
+    pattern = r'^\s*([A-Za-z_][\w]*)\s*(>=|<=|<>|!=|=|>|<)\s*(.*)\s*$'
+    match = re.match(pattern, where_part)
+    if not match:
+        raise ValueError(f"Некорректный формат условия WHERE: {where_part}")
+
+    col_name = match.group(1).strip()
+    operator = match.group(2).strip()
+    raw_val_str = match.group(3).strip()
+
+    value = raw_val_str
+    if len(value) >= 2 and (
+        (value.startswith('"') and value.endswith('"')) or
+        (value.startswith("'") and value.endswith("'"))
+    ):
+        value = value[1:-1]
+
+    lower_val = value.lower()
+    if lower_val in ("true", "1", "yes"):
+        target_value = True
+    elif lower_val in ("false", "0", "no"):
+        target_value = False
+    elif re.fullmatch(r"-?\d+", value):
+        target_value = int(value)
+    elif re.fullmatch(r"-?\d+\.\d+", value):
+        target_value = float(value)
+    else:
+        target_value = value
+
+    updated_count = 0
+    for row in data:
+        cell = row.get(col_name)
+        if cell is None:
+            continue
+
+        match_row = False
+        if operator == "=":
+            match_row = (cell == target_value)
+        elif operator == ">":
+            match_row = (cell > target_value)
+        elif operator == "<":
+            match_row = (cell < target_value)
+        elif operator == ">=":
+            match_row = (cell >= target_value)
+        elif operator == "<=":
+            match_row = (cell <= target_value)
+        elif operator in ("!=", "<>"):
+            match_row = (cell != target_value)
+
+        if not match_row:
+            continue
+
+        changed = False
+        for col, new_val in updates.items():
+            if col in row and row[col] != new_val:
+                row[col] = new_val
+                changed = True
+        if changed:
+            updated_count += 1
+
+    save_data(table_name, data)
+    return updated_count
 
 @handle_db_errors
 def execute_create_table(
@@ -247,6 +347,29 @@ def execute_select(table_name: str, where_part: Optional[str]) -> List[Dict[str,
     }
 
     return filter_records(data, condition)
+
+
+@handle_db_errors
+@log_time
+def execute_info(table_name: str) -> dict:
+    """
+    Возвращает информацию о структуре таблицы: имя, колонки, типы, число строк.
+    """
+    metadata = load_metadata()
+    if metadata is None:
+        raise ValueError("Метаданные не загружены.")
+
+    if table_name not in metadata:
+        raise ValueError(f"Таблица '{table_name}' не найдена.")
+    # список колонок: [{"name": "...", "type": "..."}, ...]
+    table_meta = metadata[table_name]
+    total_rows = len(load_data(table_name) or [])
+
+    return {
+        "name": table_name,
+        "columns": table_meta,
+        "total_rows": total_rows,
+    }
 
 @handle_db_errors
 @log_time
